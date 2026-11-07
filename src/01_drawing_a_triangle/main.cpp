@@ -37,6 +37,7 @@ private:
   GLFWwindow *window = nullptr;
   vk::raii::Context context;
   vk::raii::Instance instance = nullptr;
+  vk::raii::DebugUtilsMessengerEXT debugMessenger = nullptr;
 
   void initVulkan() {
     if (!glfwInit()) {
@@ -48,6 +49,7 @@ private:
     this->window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
     this->createInstance();
+    this->setupDebugMessenger();
   };
 
   void mainloop() {
@@ -132,10 +134,46 @@ private:
     return extensions;
   }
 
+  static VKAPI_ATTR vk::Bool32 VKAPI_CALL
+  debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+                vk::DebugUtilsMessageTypeFlagsEXT type,
+                const vk::DebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                void *pUserData) {
+
+    if (severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning ||
+        severity == vk::DebugUtilsMessageSeverityFlagBitsEXT::eError) {
+      std::cerr << "validation layer: type " << to_string(type)
+                << " msg: " << pCallbackData->pMessage << std::endl;
+    }
+    return vk::False;
+  }
+
+  void setupDebugMessenger() {
+    if (!enableValidationLayers)
+      return;
+
+    vk::DebugUtilsMessageSeverityFlagsEXT severityFlags(
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    vk::DebugUtilsMessageSeverityFlagsEXT severityFlagsd(eWarning | eError);
+    vk::DebugUtilsMessageTypeFlagsEXT messageTypeFlags(
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+
+    vk::DebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfoEXT{
+        .messageSeverity = severityFlags,
+        .messageType = messageTypeFlags,
+        .pfnUserCallback = &this->debugCallback};
+
+    this->debugMessenger = this->instance.createDebugUtilsMessengerEXT(
+        debugUtilsMessengerCreateInfoEXT);
+  }
+
   void cleanup() {
     glfwDestroyWindow(this->window);
     glfwTerminate();
-  };
+  }
 };
 
 int main() {
