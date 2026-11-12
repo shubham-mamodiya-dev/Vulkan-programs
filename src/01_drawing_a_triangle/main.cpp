@@ -27,7 +27,7 @@ constexpr uint32_t HEIGHT{600};
 const std::vector<char const *> validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
 
-#ifndef NDEBUG
+#ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
 #else
 constexpr bool enableValidationLayers = true;
@@ -62,24 +62,42 @@ private:
   std::vector<vk::Image> swapChainImages;
   vk::SurfaceFormatKHR swapChainSurfaceFormat;
   vk::Extent2D swapChainExtent;
-
   void initVulkan() {
+    std::cout << "Initializing GLFW...\n";
+
     if (!glfwInit()) {
       throw std::runtime_error("GLFW Failed to initialize");
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
     this->window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
 
-    this->createInstance();
-    this->setupDebugMessenger();
-    this->createSurface();
-    this->pickPhysicalDevice();
-    this->createLogicalDevice();
-    this->createSwapChain();
-  }
+    if (!this->window) {
+      throw std::runtime_error("Failed to create GLFW window");
+    }
 
+    std::cout << "Window created!\n";
+
+    this->createInstance();
+    std::cout << "Instance created!\n";
+
+    this->setupDebugMessenger();
+    std::cout << "Debug messenger created!\n";
+
+    this->createSurface();
+    std::cout << "Surface created!\n";
+
+    this->pickPhysicalDevice();
+    std::cout << "Physical device selected!\n";
+
+    this->createLogicalDevice();
+    std::cout << "Logical device created!\n";
+
+    this->createSwapChain();
+    std::cout << "Swap chain created!\n";
+  }
   void mainloop() {
     while (!glfwWindowShouldClose(this->window)) {
       glfwPollEvents();
@@ -173,6 +191,7 @@ private:
       std::cerr << "validation layer: type " << to_string(type)
                 << " msg: " << pCallbackData->pMessage << std::endl;
     }
+
     return vk::False;
   }
 
@@ -390,9 +409,9 @@ private:
         this->chooseSwapSurfaceFormat(availableFormats);
 
     std::vector<vk::PresentModeKHR> availablePresentModes =
-        this->physicalDevice.getSurfacePresentModesKHR();
+        physicalDevice.getSurfacePresentModesKHR(*this->surface);
     vk::PresentModeKHR presentMode =
-        this->chooseSwapPresentMode(availablePresentModes);
+        chooseSwapPresentMode(availablePresentModes);
 
     vk::SwapchainCreateInfoKHR swapChainCreateInfo{
         .surface = *this->surface,
@@ -407,6 +426,9 @@ private:
         .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
         .presentMode = presentMode,
         .clipped = true};
+
+    this->swapChain = vk::raii::SwapchainKHR(this->device, swapChainCreateInfo);
+    this->swapChainImages = this->swapChain.getImages();
   }
   void cleanup() {
     glfwDestroyWindow(this->window);
