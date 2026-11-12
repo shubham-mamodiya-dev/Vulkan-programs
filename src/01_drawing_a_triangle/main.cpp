@@ -1,9 +1,11 @@
 
 #include <algorithm>
 #include <assert.h>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -56,6 +58,11 @@ private:
 
   vk::raii::Queue queue = nullptr;
 
+  vk::raii::SwapchainKHR swapChain = nullptr;
+  std::vector<vk::Image> swapChainImages;
+  vk::SurfaceFormatKHR swapChainSurfaceFormat;
+  vk::Extent2D swapChainExtent;
+
   void initVulkan() {
     if (!glfwInit()) {
       throw std::runtime_error("GLFW Failed to initialize");
@@ -70,6 +77,7 @@ private:
     this->createSurface();
     this->pickPhysicalDevice();
     this->createLogicalDevice();
+    this->createSwapChain();
   }
 
   void mainloop() {
@@ -314,6 +322,92 @@ private:
     this->queue = vk::raii::Queue(this->device, queueIndex, 0);
   }
 
+  vk::Extent2D
+  chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &capabilities) {
+    // currentExtent is only set to the special "undefined" value described
+    // above
+    // when the window manager lets us choose the extent ourselves; any other
+    // value means the surface already dictates a fixed extent that we must use
+    // as-is.
+    if (capabilities.currentExtent.width !=
+        std::numeric_limits<uint32_t>::max()) {
+      return capabilities.currentExtent;
+    }
+    int width, height = 0;
+    glfwGetFramebufferSize(this->window, &width, &height);
+
+    return {std::clamp<uint32_t>(width, capabilities.minImageExtent.width,
+                                 capabilities.maxImageExtent.width),
+            std::clamp<uint32_t>(height, capabilities.minImageExtent.height,
+                                 capabilities.maxImageExtent.height)};
+  }
+
+  uint32_t chooseSwapMinImageCount(
+      vk::SurfaceCapabilitiesKHR const &surfaceCapabilities) {
+    auto minImageCount = std::max(3u, surfaceCapabilities.minImageCount);
+    if ((0 < surfaceCapabilities.maxImageCount) &&
+        (surfaceCapabilities.maxImageCount < minImageCount)) {
+      minImageCount = surfaceCapabilities.maxImageCount;
+    }
+    return minImageCount;
+  }
+
+  vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
+      const std::vector<vk::SurfaceFormatKHR> &availableFormats) {
+    const auto formatIt =
+        std::ranges::find_if(availableFormats, [](const auto &format) {
+          return format.format == vk::Format::eB8G8R8A8Srgb &&
+                 format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+        });
+    return formatIt != availableFormats.end() ? *formatIt : availableFormats[0];
+  }
+
+  vk::PresentModeKHR chooseSwapPresentMode(
+      std::vector<vk::PresentModeKHR> const &availablePresentModes) {
+    assert(std::ranges::any_of(availablePresentModes, [](auto presetMode) {
+      return presetMode == vk::PresentModeKHR::eFifo;
+    }));
+
+    return std::ranges::any_of(availablePresentModes,
+                               [](auto presentMode) {
+                                 return vk::PresentModeKHR::eMailbox ==
+                                        presentMode;
+                               })
+               ? vk::PresentModeKHR::eMailbox
+               : vk::PresentModeKHR::eFifo;
+  }
+
+  void createSwapChain() {
+    vk::SurfaceCapabilitiesKHR surfaceCapabilities =
+        this->physicalDevice.getSurfaceCapabilitiesKHR(*this->surface);
+
+    this->swapChainExtent = this->chooseSwapExtent(surfaceCapabilities);
+    uint32_t minImageCount = this->chooseSwapMinImageCount(surfaceCapabilities);
+
+    std::vector<vk::SurfaceFormatKHR> availableFormats =
+        this->physicalDevice.getSurfaceFormatsKHR(*this->surface);
+    this->swapChainSurfaceFormat =
+        this->chooseSwapSurfaceFormat(availableFormats);
+
+    std::vector<vk::PresentModeKHR> availablePresentModes =
+        this->physicalDevice.getSurfacePresentModesKHR();
+    vk::PresentModeKHR presentMode =
+        this->chooseSwapPresentMode(availablePresentModes);
+
+    vk::SwapchainCreateInfoKHR swapChainCreateInfo{
+        .surface = *this->surface,
+        .minImageCount = minImageCount,
+        .imageFormat = this->swapChainSurfaceFormat.format,
+        .imageColorSpace = this->swapChainSurfaceFormat.colorSpace,
+        .imageExtent = this->swapChainExtent,
+        .imageArrayLayers = 1,
+        .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+        .imageSharingMode = vk::SharingMode::eExclusive,
+        .preTransform = surfaceCapabilities.currentTransform,
+        .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        .presentMode = presentMode,
+        .clipped = true};
+  }
   void cleanup() {
     glfwDestroyWindow(this->window);
     glfwTerminate();
