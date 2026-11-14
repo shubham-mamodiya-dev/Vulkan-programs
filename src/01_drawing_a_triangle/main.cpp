@@ -62,6 +62,9 @@ private:
   std::vector<vk::Image> swapChainImages;
   vk::SurfaceFormatKHR swapChainSurfaceFormat;
   vk::Extent2D swapChainExtent;
+
+  std::vector<vk::raii::ImageView> swapChainImageViews;
+
   void initVulkan() {
     std::cout << "Initializing GLFW...\n";
 
@@ -97,6 +100,9 @@ private:
 
     this->createSwapChain();
     std::cout << "Swap chain created!\n";
+
+    this->createImageViews();
+    std::cout << "Image view created\n";
   }
   void mainloop() {
     while (!glfwWindowShouldClose(this->window)) {
@@ -429,6 +435,20 @@ private:
 
     this->swapChain = vk::raii::SwapchainKHR(this->device, swapChainCreateInfo);
     this->swapChainImages = this->swapChain.getImages();
+  }
+
+  void createImageViews() {
+    assert(swapChainImageViews.empty());
+
+    vk::ImageViewCreateInfo imageViewCreateInfo{
+        .viewType = vk::ImageViewType::e2D,
+        .format = this->swapChainSurfaceFormat.format,
+        .subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}};
+
+    for (auto &image : this->swapChainImages) {
+      imageViewCreateInfo.image = image;
+      this->swapChainImageViews.emplace_back(this->device, imageViewCreateInfo);
+    }
   }
   void cleanup() {
     glfwDestroyWindow(this->window);
